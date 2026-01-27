@@ -54,24 +54,24 @@ $togglePassword = function () {
         <form wire:submit="login" class="flex flex-col gap-5">
             <!-- Email/Employee ID Field -->
             <div class="flex flex-col gap-1.5">
-                <label class="text-sm font-medium text-gray-200" for="email">Employee ID or Email</label>
+                <label class="text-sm font-medium text-gray-200" for="login">Employee ID or Email</label>
                 <div class="relative flex items-center">
                     <input 
-                        wire:model="form.email" 
-                        id="email" 
-                        type="email" 
-                        name="email" 
+                        wire:model="form.login" 
+                        id="login" 
+                        type="text" 
+                        name="login" 
                         required 
                         autofocus 
                         autocomplete="username"
-                        placeholder="Enter ID"
+                        placeholder="Enter ID or Email"
                         class="w-full rounded-lg border border-border-dark bg-[#11161b] text-white h-12 px-4 pl-11 focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-text-secondary text-base transition-colors"
                     />
                     <div class="absolute left-3 text-text-secondary flex items-center pointer-events-none">
                         <span class="material-symbols-outlined text-[20px]">person</span>
                     </div>
                 </div>
-                <x-input-error :messages="$errors->get('form.email')" class="mt-1" />
+                <x-input-error :messages="$errors->get('form.login')" class="mt-1" />
             </div>
             
             <!-- Password Field -->
