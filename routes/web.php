@@ -14,6 +14,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     
     // Products
     Volt::route('products', 'pages.products.index')->name('products.index');
+    Volt::route('products/create', 'pages.products.create')->name('products.create');
+    Volt::route('products/{product}/edit', 'pages.products.edit')->name('products.edit');
     
     // Orders
     Volt::route('orders', 'pages.orders.index')->name('orders.index');
@@ -24,6 +26,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     
     // Categories (Admin/Manager only)
     Volt::route('categories', 'pages.categories.index')->name('categories.index');
+    
+    // Variations (Admin/Manager only)
+    Volt::route('variations', 'pages.variations.index')->name('variations.index');
     
     // Profile
     Route::view('profile', 'profile')->name('profile');

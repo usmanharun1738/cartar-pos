@@ -74,6 +74,12 @@ $logout = function (Logout $logout) {
                 <span class="material-symbols-outlined text-xl">category</span>
                 <span class="text-sm font-medium">Categories</span>
             </a>
+            
+            <a href="{{ route('variations.index') }}" wire:navigate
+               class="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors {{ request()->routeIs('variations.*') ? 'bg-primary text-white' : 'text-text-secondary hover:bg-border-dark hover:text-white' }}">
+                <span class="material-symbols-outlined text-xl">tune</span>
+                <span class="text-sm font-medium">Variations</span>
+            </a>
         </div>
         @endif
     </nav>

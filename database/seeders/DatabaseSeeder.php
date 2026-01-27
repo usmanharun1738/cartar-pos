@@ -26,6 +26,9 @@ class DatabaseSeeder extends Seeder
         
         // Create Products
         $this->createProducts($categories);
+        
+        // Create Variation Types and Options
+        $this->call(VariationSeeder::class);
     }
 
     /**

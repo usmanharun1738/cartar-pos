@@ -12,6 +12,7 @@ class Product extends Model
         'category_id',
         'name',
         'sku',
+        'sku_prefix',
         'description',
         'image',
         'cost_price',
@@ -20,6 +21,7 @@ class Product extends Model
         'low_stock_threshold',
         'is_active',
         'is_hot',
+        'has_variants',
     ];
 
     protected $casts = [
@@ -29,6 +31,7 @@ class Product extends Model
         'low_stock_threshold' => 'integer',
         'is_active' => 'boolean',
         'is_hot' => 'boolean',
+        'has_variants' => 'boolean',
     ];
 
     /**
@@ -45,6 +48,14 @@ class Product extends Model
     public function orderItems(): HasMany
     {
         return $this->hasMany(OrderItem::class);
+    }
+
+    /**
+     * Get the variants for the product.
+     */
+    public function variants(): HasMany
+    {
+        return $this->hasMany(ProductVariant::class);
     }
 
     /**
@@ -101,6 +112,26 @@ class Product extends Model
      */
     public function getFormattedPriceAttribute(): string
     {
+        if ($this->has_variants && $this->variants->count() > 0) {
+            $minPrice = $this->variants->min('price');
+            $maxPrice = $this->variants->max('price');
+            if ($minPrice != $maxPrice) {
+                return '₦' . number_format($minPrice, 2) . ' - ₦' . number_format($maxPrice, 2);
+            }
+            return '₦' . number_format($minPrice, 2);
+        }
         return '₦' . number_format($this->selling_price, 2);
     }
+
+    /**
+     * Get total stock across all variants or base stock.
+     */
+    public function getTotalStockAttribute(): int
+    {
+        if ($this->has_variants) {
+            return $this->variants->sum('stock_quantity');
+        }
+        return $this->stock_quantity;
+    }
 }
+

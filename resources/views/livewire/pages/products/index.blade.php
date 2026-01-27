@@ -16,6 +16,7 @@ state([
     'stockFilter' => 'all', // all, low, out
     'showModal' => false,
     'editingProduct' => null,
+    'expandedProducts' => [], // Track which products have variants expanded
     // Form fields
     'form' => [
         'name' => '',
@@ -33,7 +34,7 @@ state([
 
 $products = computed(function () {
     return Product::query()
-        ->with('category')
+        ->with(['category', 'variants'])
         ->when($this->search, fn($q) => $q->where('name', 'like', '%' . $this->search . '%')
             ->orWhere('sku', 'like', '%' . $this->search . '%'))
         ->when($this->categoryFilter, fn($q) => $q->where('category_id', $this->categoryFilter))
@@ -42,6 +43,14 @@ $products = computed(function () {
         ->orderBy('name')
         ->paginate(10);
 });
+
+$toggleExpanded = function ($productId) {
+    if (in_array($productId, $this->expandedProducts)) {
+        $this->expandedProducts = array_diff($this->expandedProducts, [$productId]);
+    } else {
+        $this->expandedProducts[] = $productId;
+    }
+};
 
 $categories = computed(function () {
     return Category::active()->ordered()->get();
@@ -143,10 +152,10 @@ $formatCurrency = function ($amount) {
     <!-- Page Header with Action Button -->
     <div class="flex items-center justify-between mb-6">
         <div></div>
-        <button wire:click="openAddModal" class="pos-button-primary px-4 py-2.5 flex items-center gap-2">
+        <a href="/products/create" wire:navigate class="pos-button-primary px-4 py-2.5 flex items-center gap-2">
             <span class="material-symbols-outlined text-lg">add</span>
             <span>Add Product</span>
-        </button>
+        </a>
     </div>
 
     <!-- Filters -->
@@ -214,17 +223,37 @@ $formatCurrency = function ($amount) {
             </thead>
             <tbody class="divide-y divide-border-dark">
                 @forelse($this->products as $product)
-                <tr class="hover:bg-border-dark/30 transition-colors">
+                @php
+                    $hasVariants = $product->has_variants && $product->variants->count() > 0;
+                    $isExpanded = in_array($product->id, $this->expandedProducts);
+                    $totalStock = $hasVariants ? $product->variants->sum('stock_quantity') : $product->stock_quantity;
+                    $minPrice = $hasVariants ? $product->variants->min('price') : $product->selling_price;
+                    $maxPrice = $hasVariants ? $product->variants->max('price') : $product->selling_price;
+                    $priceDisplay = $minPrice === $maxPrice ? '₦' . number_format($minPrice, 2) : '₦' . number_format($minPrice, 2) . ' - ₦' . number_format($maxPrice, 2);
+                @endphp
+                <tr class="hover:bg-border-dark/30 transition-colors {{ $hasVariants ? 'cursor-pointer' : '' }}" @if($hasVariants) wire:click="toggleExpanded({{ $product->id }})" @endif>
                     <td class="px-4 py-3">
                         <div class="flex items-center gap-3">
+                            @if($hasVariants)
+                            <button class="h-6 w-6 rounded flex items-center justify-center bg-border-dark hover:bg-primary/20 transition-colors">
+                                <span class="material-symbols-outlined text-sm text-text-secondary {{ $isExpanded ? 'rotate-90' : '' }} transition-transform">chevron_right</span>
+                            </button>
+                            @else
+                            <div class="w-6"></div>
+                            @endif
                             <div class="h-10 w-10 rounded-lg bg-border-dark flex items-center justify-center">
                                 <span class="material-symbols-outlined text-text-secondary">inventory_2</span>
                             </div>
                             <div>
                                 <p class="text-sm font-medium text-white">{{ $product->name }}</p>
-                                @if($product->is_hot)
-                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-500/20 text-red-400">HOT</span>
-                                @endif
+                                <div class="flex items-center gap-2">
+                                    @if($product->is_hot)
+                                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-500/20 text-red-400">HOT</span>
+                                    @endif
+                                    @if($hasVariants)
+                                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-primary/20 text-primary">{{ $product->variants->count() }} variants</span>
+                                    @endif
+                                </div>
                             </div>
                         </div>
                     </td>
@@ -232,36 +261,44 @@ $formatCurrency = function ($amount) {
                         <span class="text-sm text-text-secondary">{{ $product->category->name }}</span>
                     </td>
                     <td class="px-4 py-3">
-                        <span class="text-sm font-mono text-text-secondary">{{ $product->sku }}</span>
+                        <span class="text-sm font-mono text-text-secondary">{{ $product->sku_prefix ?? $product->sku }}</span>
                     </td>
                     <td class="px-4 py-3 text-right">
-                        <span class="text-sm font-semibold text-white">{{ $product->formatted_price }}</span>
+                        <span class="text-sm font-semibold text-white">{{ $priceDisplay }}</span>
                     </td>
                     <td class="px-4 py-3 text-right">
-                        <span class="text-sm font-medium {{ $product->stock_status === 'out_of_stock' ? 'text-red-400' : ($product->stock_status === 'low_stock' ? 'text-orange-400' : 'text-green-400') }}">
-                            {{ $product->stock_quantity }}
+                        <span class="text-sm font-medium {{ $totalStock == 0 ? 'text-red-400' : ($totalStock <= 10 ? 'text-orange-400' : 'text-green-400') }}">
+                            {{ $totalStock }}
                         </span>
                     </td>
                     <td class="px-4 py-3 text-center">
-                        @if($product->stock_status === 'out_of_stock')
+                        @if($totalStock == 0)
                             <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-500/20 text-red-400">Out of Stock</span>
-                        @elseif($product->stock_status === 'low_stock')
+                        @elseif($totalStock <= 10)
                             <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-500/20 text-orange-400">Low Stock</span>
                         @else
                             <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-400">In Stock</span>
                         @endif
                     </td>
-                    <td class="px-4 py-3 text-right">
+                    <td class="px-4 py-3 text-right" wire:click.stop>
                         <div class="flex items-center justify-end gap-2">
+                            @if($hasVariants)
+                            <a href="/products/{{ $product->id }}/edit" wire:navigate
+                                class="p-1.5 rounded-lg hover:bg-border-dark text-text-secondary hover:text-white transition-colors"
+                            >
+                                <span class="material-symbols-outlined text-lg">edit</span>
+                            </a>
+                            @else
                             <button 
                                 wire:click="openEditModal({{ $product->id }})"
                                 class="p-1.5 rounded-lg hover:bg-border-dark text-text-secondary hover:text-white transition-colors"
                             >
                                 <span class="material-symbols-outlined text-lg">edit</span>
                             </button>
+                            @endif
                             <button 
                                 wire:click="deleteProduct({{ $product->id }})"
-                                wire:confirm="Are you sure you want to delete this product?"
+                                wire:confirm="Are you sure you want to delete this product{{ $hasVariants ? ' and all its variants' : '' }}?"
                                 class="p-1.5 rounded-lg hover:bg-red-500/10 text-text-secondary hover:text-red-400 transition-colors"
                             >
                                 <span class="material-symbols-outlined text-lg">delete</span>
@@ -269,6 +306,50 @@ $formatCurrency = function ($amount) {
                         </div>
                     </td>
                 </tr>
+                
+                {{-- Expanded Variant Rows --}}
+                @if($hasVariants && $isExpanded)
+                    @foreach($product->variants as $variant)
+                    <tr class="bg-border-dark/20 hover:bg-border-dark/30 transition-colors">
+                        <td class="px-4 py-2 pl-16">
+                            <div class="flex items-center gap-3">
+                                <div class="h-8 w-8 rounded bg-surface-dark flex items-center justify-center">
+                                    <span class="text-xs font-bold text-primary">{{ strtoupper(substr($variant->sku, -3)) }}</span>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-white">{{ $variant->variant_name }}</p>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-4 py-2">
+                            <span class="text-xs text-text-secondary">—</span>
+                        </td>
+                        <td class="px-4 py-2">
+                            <span class="text-xs font-mono text-primary">{{ $variant->sku }}</span>
+                        </td>
+                        <td class="px-4 py-2 text-right">
+                            <span class="text-sm text-white">₦{{ number_format($variant->price, 2) }}</span>
+                        </td>
+                        <td class="px-4 py-2 text-right">
+                            <span class="text-sm font-medium {{ $variant->stock_quantity == 0 ? 'text-red-400' : ($variant->stock_quantity <= 5 ? 'text-orange-400' : 'text-green-400') }}">
+                                {{ $variant->stock_quantity }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-2 text-center">
+                            @if($variant->stock_quantity == 0)
+                                <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-red-500/20 text-red-400">Out</span>
+                            @elseif($variant->stock_quantity <= 5)
+                                <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-orange-500/20 text-orange-400">Low</span>
+                            @else
+                                <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium bg-green-500/20 text-green-400">OK</span>
+                            @endif
+                        </td>
+                        <td class="px-4 py-2 text-right">
+                            <span class="text-xs text-text-secondary">—</span>
+                        </td>
+                    </tr>
+                    @endforeach
+                @endif
                 @empty
                 <tr>
                     <td colspan="7" class="px-4 py-12 text-center">

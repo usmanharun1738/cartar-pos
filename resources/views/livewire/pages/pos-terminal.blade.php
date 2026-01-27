@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\Product;
+use App\Models\ProductVariant;
 use App\Models\Category;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -25,14 +26,60 @@ $categories = computed(function () {
     return Category::active()->ordered()->get();
 });
 
-$products = computed(function () {
-    return Product::query()
+// Get all sellable items (simple products + variants)
+$sellableItems = computed(function () {
+    $items = collect();
+    
+    // Get products
+    $products = Product::query()
+        ->with(['category', 'variants'])
         ->active()
-        ->inStock()
         ->when($this->search, fn($q) => $q->where('name', 'like', '%' . $this->search . '%'))
         ->when($this->selectedCategory, fn($q) => $q->where('category_id', $this->selectedCategory))
         ->orderBy('name')
         ->get();
+    
+    foreach ($products as $product) {
+        if ($product->has_variants && $product->variants->count() > 0) {
+            // Add each variant as a sellable item
+            foreach ($product->variants->where('is_active', true) as $variant) {
+                if ($variant->stock_quantity > 0) {
+                    $items->push([
+                        'type' => 'variant',
+                        'id' => $variant->id,
+                        'product_id' => $product->id,
+                        'name' => $product->name,
+                        'variant_name' => $variant->variant_name,
+                        'sku' => $variant->sku,
+                        'price' => floatval($variant->price),
+                        'formatted_price' => $variant->formatted_price,
+                        'stock' => $variant->stock_quantity,
+                        'category' => $product->category->name,
+                        'is_hot' => $product->is_hot,
+                    ]);
+                }
+            }
+        } else {
+            // Add simple product
+            if ($product->stock_quantity > 0) {
+                $items->push([
+                    'type' => 'product',
+                    'id' => $product->id,
+                    'product_id' => $product->id,
+                    'name' => $product->name,
+                    'variant_name' => null,
+                    'sku' => $product->sku,
+                    'price' => floatval($product->selling_price),
+                    'formatted_price' => $product->formatted_price,
+                    'stock' => $product->stock_quantity,
+                    'category' => $product->category->name,
+                    'is_hot' => $product->is_hot,
+                ]);
+            }
+        }
+    }
+    
+    return $items;
 });
 
 $cartTotal = computed(function () {
@@ -52,28 +99,54 @@ $changeDue = computed(function () {
     return max(0, $cash - $this->grandTotal);
 });
 
-$addToCart = function ($productId) {
-    $product = Product::find($productId);
-    
-    if (!$product || $product->stock_quantity <= 0) {
-        return;
-    }
-    
-    $cartKey = array_search($productId, array_column($this->cart, 'id'));
-    
-    if ($cartKey !== false) {
-        // Check stock before increasing
-        if ($this->cart[$cartKey]['quantity'] < $product->stock_quantity) {
-            $this->cart[$cartKey]['quantity']++;
+// Add item to cart (handles both products and variants)
+$addToCart = function ($type, $id) {
+    if ($type === 'variant') {
+        $variant = ProductVariant::with('product')->find($id);
+        if (!$variant || $variant->stock_quantity <= 0) return;
+        
+        $cartKey = 'variant_' . $id;
+        $existingIndex = array_search($cartKey, array_column($this->cart, 'cart_key'));
+        
+        if ($existingIndex !== false) {
+            if ($this->cart[$existingIndex]['quantity'] < $variant->stock_quantity) {
+                $this->cart[$existingIndex]['quantity']++;
+            }
+        } else {
+            $this->cart[] = [
+                'cart_key' => $cartKey,
+                'type' => 'variant',
+                'id' => $variant->id,
+                'product_id' => $variant->product_id,
+                'name' => $variant->product->name . ' - ' . $variant->variant_name,
+                'price' => floatval($variant->price),
+                'quantity' => 1,
+                'max_qty' => $variant->stock_quantity,
+            ];
         }
     } else {
-        $this->cart[] = [
-            'id' => $product->id,
-            'name' => $product->name,
-            'price' => floatval($product->selling_price),
-            'quantity' => 1,
-            'max_qty' => $product->stock_quantity,
-        ];
+        $product = Product::find($id);
+        if (!$product || $product->stock_quantity <= 0) return;
+        
+        $cartKey = 'product_' . $id;
+        $existingIndex = array_search($cartKey, array_column($this->cart, 'cart_key'));
+        
+        if ($existingIndex !== false) {
+            if ($this->cart[$existingIndex]['quantity'] < $product->stock_quantity) {
+                $this->cart[$existingIndex]['quantity']++;
+            }
+        } else {
+            $this->cart[] = [
+                'cart_key' => $cartKey,
+                'type' => 'product',
+                'id' => $product->id,
+                'product_id' => $product->id,
+                'name' => $product->name,
+                'price' => floatval($product->selling_price),
+                'quantity' => 1,
+                'max_qty' => $product->stock_quantity,
+            ];
+        }
     }
 };
 
@@ -131,7 +204,7 @@ $processPayment = function () {
     foreach ($this->cart as $item) {
         OrderItem::create([
             'order_id' => $order->id,
-            'product_id' => $item['id'],
+            'product_id' => $item['product_id'],
             'product_name' => $item['name'],
             'unit_price' => $item['price'],
             'quantity' => $item['quantity'],
@@ -139,8 +212,12 @@ $processPayment = function () {
             'subtotal' => $item['price'] * $item['quantity'],
         ]);
         
-        // Decrease stock
-        Product::where('id', $item['id'])->decrement('stock_quantity', $item['quantity']);
+        // Decrease stock based on type
+        if ($item['type'] === 'variant') {
+            ProductVariant::where('id', $item['id'])->decrement('stock_quantity', $item['quantity']);
+        } else {
+            Product::where('id', $item['id'])->decrement('stock_quantity', $item['quantity']);
+        }
     }
     
     // Clear cart
@@ -206,28 +283,30 @@ $formatCurrency = function ($amount) {
         <!-- Products Grid -->
         <div class="flex-1 overflow-y-auto">
             <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                @forelse($this->products as $product)
+                @forelse($this->sellableItems as $item)
                 <button 
-                    wire:click="addToCart({{ $product->id }})"
-                    class="pos-card p-4 text-left hover:border-primary transition-colors group {{ $product->stock_quantity <= 0 ? 'opacity-50 cursor-not-allowed' : '' }}"
-                    {{ $product->stock_quantity <= 0 ? 'disabled' : '' }}
+                    wire:click="addToCart('{{ $item['type'] }}', {{ $item['id'] }})"
+                    class="pos-card p-4 text-left hover:border-primary transition-colors group"
                 >
                     <div class="h-16 w-full rounded-lg bg-border-dark flex items-center justify-center mb-3">
                         <span class="material-symbols-outlined text-3xl text-text-secondary group-hover:text-primary transition-colors">inventory_2</span>
                     </div>
                     <div class="flex items-start justify-between gap-2">
                         <div class="flex-1 min-w-0">
-                            <p class="text-sm font-medium text-white truncate">{{ $product->name }}</p>
-                            <p class="text-xs text-text-secondary">{{ $product->category->name }}</p>
+                            <p class="text-sm font-medium text-white truncate">{{ $item['name'] }}</p>
+                            @if($item['variant_name'])
+                                <p class="text-xs text-primary truncate">{{ $item['variant_name'] }}</p>
+                            @endif
+                            <p class="text-xs text-text-secondary">{{ $item['category'] }}</p>
                         </div>
-                        @if($product->is_hot)
+                        @if($item['is_hot'])
                             <span class="px-1.5 py-0.5 rounded text-xs font-medium bg-red-500/20 text-red-400">HOT</span>
                         @endif
                     </div>
                     <div class="flex items-center justify-between mt-2">
-                        <span class="text-lg font-bold text-primary">{{ $product->formatted_price }}</span>
-                        <span class="text-xs {{ $product->stock_quantity <= 5 ? 'text-orange-400' : 'text-text-secondary' }}">
-                            {{ $product->stock_quantity }} left
+                        <span class="text-lg font-bold text-primary">{{ $item['formatted_price'] }}</span>
+                        <span class="text-xs {{ $item['stock'] <= 5 ? 'text-orange-400' : 'text-text-secondary' }}">
+                            {{ $item['stock'] }} left
                         </span>
                     </div>
                 </button>
