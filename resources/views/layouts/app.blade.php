@@ -20,11 +20,13 @@
                 <!-- Top Header -->
                 @if (isset($header))
                 <header class="bg-surface-dark border-b border-border-dark px-6 py-4">
-                    <div class="flex items-center justify-between">
-                        <div>
+                    <div class="flex items-center justify-between gap-4">
+                        <!-- Page Header Content (from slot) -->
+                        <div class="flex-1 min-w-0">
                             {{ $header }}
                         </div>
-                        <div class="flex items-center gap-4">
+                        <!-- Right side controls -->
+                        <div class="flex items-center gap-4 flex-shrink-0">
                             <!-- Search Bar -->
                             <div class="relative hidden lg:block">
                                 <input 

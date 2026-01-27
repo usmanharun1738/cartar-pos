@@ -135,19 +135,20 @@ $formatCurrency = function ($amount) {
 ?>
 
 <x-slot name="header">
-    <div class="flex items-center justify-between">
-        <div>
-            <h1 class="text-2xl font-bold text-white">Products</h1>
-            <p class="text-sm text-text-secondary mt-1">Manage your inventory</p>
-        </div>
+    <h1 class="text-2xl font-bold text-white">Products</h1>
+    <p class="text-sm text-text-secondary mt-1">Manage your inventory</p>
+</x-slot>
+
+<div>
+    <!-- Page Header with Action Button -->
+    <div class="flex items-center justify-between mb-6">
+        <div></div>
         <button wire:click="openAddModal" class="pos-button-primary px-4 py-2.5 flex items-center gap-2">
             <span class="material-symbols-outlined text-lg">add</span>
             <span>Add Product</span>
         </button>
     </div>
-</x-slot>
 
-<div>
     <!-- Filters -->
     <div class="pos-card p-4 mb-6">
         <div class="flex flex-wrap items-center gap-4">
