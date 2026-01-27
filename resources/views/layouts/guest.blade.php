@@ -1,30 +1,32 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="dark">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        <title>{{ config('app.name', 'Laravel') }}</title>
-
-        <!-- Fonts -->
-        <link rel="preconnect" href="https://fonts.bunny.net">
-        <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
+        <title>{{ config('app.name', 'CARTAR POS') }}</title>
 
         <!-- Scripts -->
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
-    <body class="font-sans text-gray-900 antialiased">
-        <div class="min-h-screen flex flex-col sm:justify-center items-center pt-6 sm:pt-0 bg-gray-100 dark:bg-gray-900">
-            <div>
-                <a href="/" wire:navigate>
-                    <x-application-logo class="w-20 h-20 fill-current text-gray-500" />
-                </a>
+    <body class="font-display bg-background-dark min-h-screen flex flex-col overflow-hidden antialiased">
+        <!-- Header / System Status Bar -->
+        <div class="w-full flex justify-between items-center px-6 py-3 absolute top-0 left-0 z-10">
+            <div class="flex items-center gap-2">
+                <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                <span class="text-xs font-medium text-text-secondary">System Online</span>
             </div>
-
-            <div class="w-full sm:max-w-md mt-6 px-6 py-4 bg-white dark:bg-gray-800 shadow-md overflow-hidden sm:rounded-lg">
-                {{ $slot }}
-            </div>
+            <div class="text-xs font-medium text-text-secondary">v1.0.0</div>
         </div>
+        
+        <!-- Main Content Area -->
+        <div class="flex flex-1 items-center justify-center p-4">
+            {{ $slot }}
+        </div>
+        
+        <!-- Background Pattern Decoration (Subtle) -->
+        <div class="fixed inset-0 pointer-events-none z-[-1] opacity-[0.03]" style="background-image: radial-gradient(#ffffff 1px, transparent 1px); background-size: 24px 24px;"></div>
     </body>
 </html>
+

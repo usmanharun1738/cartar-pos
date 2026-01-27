@@ -1,3 +1,66 @@
+/* Import Inter font for modern POS look */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+/* Import Material Symbols for icons */
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Custom scrollbar for dark mode POS feel */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #111418;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #283039;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #3e4a56;
+}
+
+/* Material Symbols configuration */
+.material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+.material-symbols-outlined.fill {
+    font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+/* Toggle switch styles */
+.toggle-checkbox:checked {
+    right: 0;
+    border-color: #137fec;
+}
+
+.toggle-checkbox:checked + .toggle-label {
+    background-color: #137fec;
+}
+
+/* POS-specific utility classes */
+@layer components {
+    .pos-card {
+        @apply bg-surface-dark border border-border-dark rounded-xl shadow-sm;
+    }
+    
+    .pos-input {
+        @apply bg-border-dark border-transparent focus:border-primary focus:ring-0 rounded-lg text-white text-sm py-2.5 px-3;
+    }
+    
+    .pos-button-primary {
+        @apply bg-primary hover:bg-blue-600 text-white font-bold rounded-lg shadow-lg shadow-primary/20 transition-all;
+    }
+    
+    .pos-button-secondary {
+        @apply bg-border-dark text-text-secondary hover:text-white rounded-lg transition-colors;
+    }
+}
