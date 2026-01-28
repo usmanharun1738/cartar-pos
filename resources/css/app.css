@@ -42,7 +42,7 @@
     border-color: #137fec;
 }
 
-.toggle-checkbox:checked + .toggle-label {
+.toggle-checkbox:checked+.toggle-label {
     background-color: #137fec;
 }
 
@@ -51,16 +51,72 @@
     .pos-card {
         @apply bg-surface-dark border border-border-dark rounded-xl shadow-sm;
     }
-    
+
     .pos-input {
         @apply bg-border-dark border-transparent focus:border-primary focus:ring-0 rounded-lg text-white text-sm py-2.5 px-3;
     }
-    
+
     .pos-button-primary {
         @apply bg-primary hover:bg-blue-600 text-white font-bold rounded-lg shadow-lg shadow-primary/20 transition-all;
     }
-    
+
     .pos-button-secondary {
         @apply bg-border-dark text-text-secondary hover:text-white rounded-lg transition-colors;
+    }
+}
+
+/* Print Styles for Receipt */
+@media print {
+
+    /* Hide everything except the receipt */
+    body * {
+        visibility: hidden;
+    }
+
+    #receipt-content,
+    #receipt-content * {
+        visibility: visible;
+    }
+
+    #receipt-content {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 80mm;
+        /* Standard thermal printer width */
+        background: white !important;
+        font-family: 'Courier New', monospace;
+        font-size: 12px;
+        color: black !important;
+        padding: 5mm;
+    }
+
+    /* Reset all colors to black for printing */
+    #receipt-content * {
+        color: black !important;
+        background: transparent !important;
+    }
+
+    /* Make totals bold */
+    #receipt-content .font-bold {
+        font-weight: bold !important;
+    }
+
+    /* Dashed dividers */
+    #receipt-content .border-dashed {
+        border-style: dashed !important;
+        border-color: #333 !important;
+    }
+
+    /* Remove shadows and rounded corners */
+    #receipt-content {
+        box-shadow: none !important;
+        border-radius: 0 !important;
+    }
+
+    /* Page setup */
+    @page {
+        size: 80mm auto;
+        margin: 0;
     }
 }

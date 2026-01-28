@@ -20,6 +20,9 @@ state([
     'showCheckoutModal' => false,
     'cashReceived' => '',
     'orderNotes' => '',
+    // Receipt modal
+    'showReceiptModal' => false,
+    'completedOrder' => null,
 ]);
 
 $categories = computed(function () {
@@ -118,7 +121,8 @@ $addToCart = function ($type, $id) {
                 'type' => 'variant',
                 'id' => $variant->id,
                 'product_id' => $variant->product_id,
-                'name' => $variant->product->name . ' - ' . $variant->variant_name,
+                'name' => $variant->product->name,
+                'variant_name' => $variant->variant_name,
                 'price' => floatval($variant->price),
                 'quantity' => 1,
                 'max_qty' => $variant->stock_quantity,
@@ -142,6 +146,7 @@ $addToCart = function ($type, $id) {
                 'id' => $product->id,
                 'product_id' => $product->id,
                 'name' => $product->name,
+                'variant_name' => null,
                 'price' => floatval($product->selling_price),
                 'quantity' => 1,
                 'max_qty' => $product->stock_quantity,
@@ -186,6 +191,9 @@ $processPayment = function () {
         return;
     }
     
+    // Store cart items for receipt before clearing
+    $cartItems = $this->cart;
+    
     // Create Order
     $order = Order::create([
         'user_id' => auth()->id(),
@@ -201,11 +209,11 @@ $processPayment = function () {
     ]);
     
     // Create Order Items and update stock
-    foreach ($this->cart as $item) {
+    foreach ($cartItems as $item) {
         OrderItem::create([
             'order_id' => $order->id,
             'product_id' => $item['product_id'],
-            'product_name' => $item['name'],
+            'product_name' => $item['name'] . ($item['variant_name'] ? ' - ' . $item['variant_name'] : ''),
             'unit_price' => $item['price'],
             'quantity' => $item['quantity'],
             'discount' => 0,
@@ -220,12 +228,31 @@ $processPayment = function () {
         }
     }
     
-    // Clear cart
+    // Store completed order for receipt
+    $this->completedOrder = [
+        'order_number' => $order->order_number,
+        'date' => $order->created_at->format('M d, Y'),
+        'time' => $order->created_at->format('h:i A'),
+        'cashier' => auth()->user()->name,
+        'items' => $cartItems,
+        'subtotal' => $this->cartTotal,
+        'tax' => $this->taxAmount,
+        'total' => $this->grandTotal,
+        'cash_received' => $cash,
+        'change_due' => $this->changeDue,
+    ];
+    
+    // Clear cart and close checkout
     $this->clearCart();
     $this->closeCheckout();
     
-    // Show success
-    session()->flash('message', 'Order ' . $order->order_number . ' completed successfully!');
+    // Show receipt modal
+    $this->showReceiptModal = true;
+};
+
+$closeReceipt = function () {
+    $this->showReceiptModal = false;
+    $this->completedOrder = null;
 };
 
 $formatCurrency = function ($amount) {
@@ -247,6 +274,7 @@ $formatCurrency = function ($amount) {
     </div>
 </x-slot>
 
+<div>
 <div class="flex gap-6 h-[calc(100vh-180px)]">
     <!-- Products Grid -->
     <div class="flex-1 flex flex-col overflow-hidden">
@@ -340,7 +368,12 @@ $formatCurrency = function ($amount) {
             @forelse($cart as $index => $item)
             <div class="bg-border-dark/50 rounded-lg p-3">
                 <div class="flex items-start justify-between gap-2 mb-2">
-                    <p class="text-sm font-medium text-white">{{ $item['name'] }}</p>
+                    <div>
+                        <p class="text-sm font-medium text-white">{{ $item['name'] }}</p>
+                        @if($item['variant_name'])
+                            <p class="text-xs text-text-secondary">{{ $item['variant_name'] }}</p>
+                        @endif
+                    </div>
                     <button wire:click="removeFromCart({{ $index }})" class="text-text-secondary hover:text-red-400 transition-colors">
                         <span class="material-symbols-outlined text-lg">close</span>
                     </button>
@@ -505,3 +538,144 @@ $formatCurrency = function ($amount) {
     </div>
 </div>
 @endif
+
+{{-- Receipt Modal --}}
+@if($showReceiptModal && $completedOrder)
+<div class="fixed inset-0 z-50 overflow-y-auto print:relative print:overflow-visible" aria-modal="true">
+    <!-- Backdrop (hidden on print) -->
+    <div class="fixed inset-0 bg-black/70 print:hidden" wire:click="closeReceipt"></div>
+    
+    <div class="flex items-center justify-center min-h-screen px-4 print:block print:min-h-0 print:px-0">
+        <div class="relative bg-white w-full max-w-sm rounded-xl shadow-2xl print:shadow-none print:rounded-none print:max-w-none" id="receipt-content">
+            
+            <!-- Close button (hidden on print) -->
+            <button wire:click="closeReceipt" class="absolute top-4 right-4 p-2 rounded-lg hover:bg-gray-100 text-gray-500 print:hidden">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+            
+            <!-- Receipt Content -->
+            <div class="p-6 print:p-2 print:text-xs">
+                
+                <!-- Store Header -->
+                <div class="text-center mb-6 print:mb-3">
+                    <h2 class="text-xl font-bold text-gray-900 print:text-base">CARTAR POS</h2>
+                    <p class="text-sm text-gray-600 print:text-xs">123 Business Street</p>
+                    <p class="text-sm text-gray-600 print:text-xs">Lagos, Nigeria</p>
+                    <p class="text-sm text-gray-600 print:text-xs">Tel: +234 123 456 7890</p>
+                </div>
+                
+                <!-- Divider -->
+                <div class="border-t border-dashed border-gray-300 my-4 print:my-2"></div>
+                
+                <!-- Order Info -->
+                <div class="space-y-1 text-sm print:text-xs">
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Order:</span>
+                        <span class="font-semibold text-gray-900">{{ $completedOrder['order_number'] }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Date:</span>
+                        <span class="text-gray-900">{{ $completedOrder['date'] }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Time:</span>
+                        <span class="text-gray-900">{{ $completedOrder['time'] }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Cashier:</span>
+                        <span class="text-gray-900">{{ $completedOrder['cashier'] }}</span>
+                    </div>
+                </div>
+                
+                <!-- Divider -->
+                <div class="border-t border-dashed border-gray-300 my-4 print:my-2"></div>
+                
+                <!-- Items -->
+                <div class="space-y-2 print:space-y-1">
+                    <div class="flex justify-between text-xs font-semibold text-gray-600 uppercase tracking-wide">
+                        <span>Item</span>
+                        <span>Amount</span>
+                    </div>
+                    @foreach($completedOrder['items'] as $item)
+                    <div class="text-sm print:text-xs">
+                        <div class="flex justify-between">
+                            <span class="text-gray-900 font-medium">
+                                {{ $item['name'] }}
+                                @if($item['variant_name'])
+                                    <span class="text-gray-600 text-xs">- {{ $item['variant_name'] }}</span>
+                                @endif
+                            </span>
+                            <span class="text-gray-900 font-semibold">₦{{ number_format($item['price'] * $item['quantity'], 2) }}</span>
+                        </div>
+                        <div class="text-xs text-gray-500">
+                            {{ $item['quantity'] }} x ₦{{ number_format($item['price'], 2) }}
+                        </div>
+                    </div>
+                    @endforeach
+                </div>
+                
+                <!-- Divider -->
+                <div class="border-t border-dashed border-gray-300 my-4 print:my-2"></div>
+                
+                <!-- Totals -->
+                <div class="space-y-2 text-sm print:text-xs">
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Subtotal</span>
+                        <span class="text-gray-900">₦{{ number_format($completedOrder['subtotal'], 2) }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Tax (5%)</span>
+                        <span class="text-gray-900">₦{{ number_format($completedOrder['tax'], 2) }}</span>
+                    </div>
+                    <div class="flex justify-between text-lg font-bold print:text-sm">
+                        <span class="text-gray-900">TOTAL</span>
+                        <span class="text-gray-900">₦{{ number_format($completedOrder['total'], 2) }}</span>
+                    </div>
+                </div>
+                
+                <!-- Divider -->
+                <div class="border-t border-dashed border-gray-300 my-4 print:my-2"></div>
+                
+                <!-- Payment Info -->
+                <div class="space-y-1 text-sm print:text-xs">
+                    <div class="flex justify-between">
+                        <span class="text-gray-600">Cash Received</span>
+                        <span class="text-gray-900">₦{{ number_format($completedOrder['cash_received'], 2) }}</span>
+                    </div>
+                    <div class="flex justify-between font-bold text-green-600">
+                        <span>Change</span>
+                        <span>₦{{ number_format($completedOrder['change_due'], 2) }}</span>
+                    </div>
+                </div>
+                
+                <!-- Divider -->
+                <div class="border-t border-dashed border-gray-300 my-4 print:my-2"></div>
+                
+                <!-- Footer -->
+                <div class="text-center">
+                    <p class="text-sm font-medium text-gray-900 print:text-xs">Thank you for shopping!</p>
+                    <p class="text-xs text-gray-500 mt-1">Please keep this receipt for your records</p>
+                </div>
+            </div>
+            
+            <!-- Action Buttons (hidden on print) -->
+            <div class="px-6 pb-6 flex gap-3 print:hidden">
+                <button 
+                    wire:click="closeReceipt"
+                    class="flex-1 py-3 rounded-lg bg-gray-100 text-gray-700 font-medium hover:bg-gray-200 transition-colors"
+                >
+                    Close
+                </button>
+                <button 
+                    onclick="window.print()"
+                    class="flex-1 py-3 rounded-lg bg-primary text-white font-medium hover:bg-primary-dark transition-colors flex items-center justify-center gap-2"
+                >
+                    <span class="material-symbols-outlined text-lg">print</span>
+                    Print Receipt
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+</div>
