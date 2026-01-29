@@ -35,6 +35,46 @@ class Product extends Model
     ];
 
     /**
+     * Boot the model.
+     */
+    protected static function boot(): void
+    {
+        parent::boot();
+
+        static::creating(function ($product) {
+            // Auto-generate SKU if not provided
+            if (empty($product->sku)) {
+                $product->sku = self::generateSku($product->category_id);
+            }
+        });
+    }
+
+    /**
+     * Generate a unique SKU with category prefix.
+     */
+    public static function generateSku(?int $categoryId = null): string
+    {
+        // Get category prefix (first 4 chars of category name)
+        $prefix = 'PRD';
+        if ($categoryId) {
+            $category = Category::find($categoryId);
+            if ($category) {
+                // Use first 4 letters of category name, uppercase
+                $prefix = strtoupper(substr(preg_replace('/[^a-zA-Z]/', '', $category->name), 0, 4));
+                if (empty($prefix)) {
+                    $prefix = 'PRD';
+                }
+            }
+        }
+
+        do {
+            $sku = $prefix . '-' . strtoupper(substr(uniqid(), -5));
+        } while (self::where('sku', $sku)->exists());
+
+        return $sku;
+    }
+
+    /**
      * Get the category that the product belongs to.
      */
     public function category(): BelongsTo
