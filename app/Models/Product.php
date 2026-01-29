@@ -99,6 +99,31 @@ class Product extends Model
     }
 
     /**
+     * Get the images for the product.
+     */
+    public function images(): HasMany
+    {
+        return $this->hasMany(ProductImage::class)->orderBy('sort_order');
+    }
+
+    /**
+     * Get the primary image for the product.
+     */
+    public function getPrimaryImageAttribute(): ?ProductImage
+    {
+        return $this->images->where('is_primary', true)->first() 
+            ?? $this->images->first();
+    }
+
+    /**
+     * Get the primary image URL.
+     */
+    public function getPrimaryImageUrlAttribute(): ?string
+    {
+        return $this->primaryImage?->url;
+    }
+
+    /**
      * Scope a query to only include active products.
      */
     public function scopeActive($query)

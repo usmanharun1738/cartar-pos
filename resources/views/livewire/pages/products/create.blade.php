@@ -2,14 +2,19 @@
 
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\ProductImage;
 use App\Models\ProductVariant;
 use App\Models\VariationType;
 use App\Models\VariationOption;
+use Livewire\WithFileUploads;
 
 use function Livewire\Volt\layout;
 use function Livewire\Volt\state;
 use function Livewire\Volt\computed;
 use function Livewire\Volt\mount;
+use function Livewire\Volt\uses;
+
+uses([WithFileUploads::class]);
 
 layout('layouts.app');
 
@@ -21,6 +26,9 @@ state([
     'categoryId' => '',
     'basePrice' => '',
     'stockQuantity' => 0,
+    
+    // Product Images (max 3)
+    'productImages' => [],
     
     // Product Options
     'selectedOptions' => [], // ['size' => [1, 2, 3], 'color' => [4, 5]]
@@ -187,6 +195,13 @@ $removeVariant = function ($index) {
     $this->variants = array_values($this->variants);
 };
 
+// Remove an image from upload queue
+$removeImage = function ($index) {
+    $images = $this->productImages;
+    unset($images[$index]);
+    $this->productImages = array_values($images);
+};
+
 // Save Product with Variants
 $saveProduct = function () {
     // Validate - skuPrefix is now optional for simple products
@@ -194,42 +209,45 @@ $saveProduct = function () {
         'productName' => 'required|string|max:255',
         'skuPrefix' => 'nullable|string|max:20',
         'categoryId' => 'required|exists:categories,id',
+        'productImages.*' => 'image|max:2048', // 2MB max
     ]);
     
-    if (empty($this->variants)) {
-        // Save as simple product (SKU will auto-generate if empty)
-        $productData = [
-            'name' => $this->productName,
-            'category_id' => $this->categoryId,
-            'selling_price' => floatval($this->basePrice) ?: 0,
-            'cost_price' => 0,
-            'stock_quantity' => intval($this->stockQuantity) ?: 0,
-            'is_active' => true,
-            'has_variants' => false,
-        ];
-        
-        // Only set SKU if provided
-        if (!empty($this->skuPrefix)) {
-            $productData['sku'] = $this->skuPrefix;
-            $productData['sku_prefix'] = $this->skuPrefix;
+    // Create product data
+    $productData = [
+        'name' => $this->productName,
+        'category_id' => $this->categoryId,
+        'selling_price' => floatval($this->basePrice) ?: 0,
+        'cost_price' => 0,
+        'stock_quantity' => intval($this->stockQuantity) ?: 0,
+        'is_active' => true,
+        'has_variants' => !empty($this->variants),
+    ];
+    
+    // Only set SKU if provided
+    if (!empty($this->skuPrefix)) {
+        $productData['sku'] = $this->skuPrefix;
+        $productData['sku_prefix'] = $this->skuPrefix;
+    }
+    
+    $product = Product::create($productData);
+    
+    // Save images
+    if (!empty($this->productImages)) {
+        foreach ($this->productImages as $index => $image) {
+            $path = $image->store("products/{$product->id}", 'public');
+            
+            ProductImage::create([
+                'product_id' => $product->id,
+                'path' => $path,
+                'filename' => $image->getClientOriginalName(),
+                'is_primary' => $index === 0, // First image is primary
+                'sort_order' => $index,
+            ]);
         }
-        
-        Product::create($productData);
-    } else {
-        // Save product with variants (SKU prefix required for variant SKUs)
-        $product = Product::create([
-            'name' => $this->productName,
-            'sku' => $this->skuPrefix ?: null, // Will auto-generate
-            'sku_prefix' => $this->skuPrefix ?: null,
-            'category_id' => $this->categoryId,
-            'selling_price' => floatval($this->basePrice) ?: 0,
-            'cost_price' => 0,
-            'stock_quantity' => 0,
-            'is_active' => true,
-            'has_variants' => true,
-        ]);
-        
-        // Create variants
+    }
+    
+    // Create variants if any
+    if (!empty($this->variants)) {
         foreach ($this->variants as $variantData) {
             $variant = $product->variants()->create([
                 'sku' => $variantData['sku'],
@@ -345,6 +363,67 @@ $getSelectedOptionObjects = function ($typeSlug) {
                             class="w-full h-10 bg-border-dark border-0 rounded-lg text-white text-sm px-4 focus:ring-1 focus:ring-primary placeholder:text-text-secondary"
                             placeholder="0"
                         />
+                    </div>
+                </div>
+                
+                <!-- Product Images -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-200 mb-1.5">
+                        Product Images 
+                        <span class="text-text-secondary font-normal">(Max 3, up to 2MB each)</span>
+                    </label>
+                    
+                    @if(count($productImages) < 3)
+                    <div class="relative">
+                        <input 
+                            type="file" 
+                            wire:model="productImages"
+                            accept="image/jpeg,image/png,image/webp"
+                            multiple
+                            class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                        />
+                        <div class="border-2 border-dashed border-border-dark rounded-lg p-6 text-center hover:border-primary/50 transition-colors">
+                            <span class="material-symbols-outlined text-3xl text-text-secondary mb-2">add_photo_alternate</span>
+                            <p class="text-sm text-text-secondary">Click or drag images here</p>
+                            <p class="text-xs text-text-secondary mt-1">JPG, PNG, or WebP</p>
+                        </div>
+                    </div>
+                    @endif
+                    
+                    <!-- Image Preview Grid -->
+                    @if(!empty($productImages))
+                    <div class="grid grid-cols-3 gap-3 mt-3">
+                        @foreach($productImages as $index => $image)
+                        <div class="relative group rounded-lg overflow-hidden bg-border-dark aspect-square">
+                            <img 
+                                src="{{ $image->temporaryUrl() }}" 
+                                alt="Preview {{ $index + 1 }}"
+                                class="w-full h-full object-cover"
+                            />
+                            @if($index === 0)
+                            <span class="absolute top-2 left-2 px-2 py-0.5 bg-primary text-white text-xs font-medium rounded">
+                                Primary
+                            </span>
+                            @endif
+                            <button 
+                                type="button"
+                                wire:click="removeImage({{ $index }})"
+                                class="absolute top-2 right-2 p-1 bg-red-500 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                                <span class="material-symbols-outlined text-sm">close</span>
+                            </button>
+                        </div>
+                        @endforeach
+                    </div>
+                    @endif
+                    
+                    @error('productImages.*') 
+                    <span class="text-xs text-red-400 mt-1">{{ $message }}</span> 
+                    @enderror
+                    
+                    <div wire:loading wire:target="productImages" class="text-sm text-primary mt-2">
+                        <span class="material-symbols-outlined text-sm animate-spin">refresh</span>
+                        Uploading...
                     </div>
                 </div>
             </div>

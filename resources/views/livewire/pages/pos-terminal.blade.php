@@ -35,7 +35,7 @@ $sellableItems = computed(function () {
     
     // Get products
     $products = Product::query()
-        ->with(['category', 'variants'])
+        ->with(['category', 'variants', 'images'])
         ->active()
         ->when($this->search, fn($q) => $q->where('name', 'like', '%' . $this->search . '%'))
         ->when($this->selectedCategory, fn($q) => $q->where('category_id', $this->selectedCategory))
@@ -59,6 +59,7 @@ $sellableItems = computed(function () {
                         'stock' => $variant->stock_quantity,
                         'category' => $product->category->name,
                         'is_hot' => $product->is_hot,
+                        'image' => $product->primary_image_url,
                     ]);
                 }
             }
@@ -77,6 +78,7 @@ $sellableItems = computed(function () {
                     'stock' => $product->stock_quantity,
                     'category' => $product->category->name,
                     'is_hot' => $product->is_hot,
+                    'image' => $product->primary_image_url,
                 ]);
             }
         }
@@ -316,8 +318,12 @@ $formatCurrency = function ($amount) {
                     wire:click="addToCart('{{ $item['type'] }}', {{ $item['id'] }})"
                     class="pos-card p-4 text-left hover:border-primary transition-colors group"
                 >
-                    <div class="h-16 w-full rounded-lg bg-border-dark flex items-center justify-center mb-3">
-                        <span class="material-symbols-outlined text-3xl text-text-secondary group-hover:text-primary transition-colors">inventory_2</span>
+                    <div class="h-16 w-full rounded-lg bg-border-dark flex items-center justify-center mb-3 overflow-hidden">
+                        @if($item['image'])
+                            <img src="{{ $item['image'] }}" alt="{{ $item['name'] }}" class="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                        @else
+                            <span class="material-symbols-outlined text-3xl text-text-secondary group-hover:text-primary transition-colors">inventory_2</span>
+                        @endif
                     </div>
                     <div class="flex items-start justify-between gap-2">
                         <div class="flex-1 min-w-0">

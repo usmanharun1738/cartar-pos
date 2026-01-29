@@ -34,7 +34,7 @@ state([
 
 $products = computed(function () {
     return Product::query()
-        ->with(['category', 'variants'])
+        ->with(['category', 'variants', 'images'])
         ->when($this->search, fn($q) => $q->where('name', 'like', '%' . $this->search . '%')
             ->orWhere('sku', 'like', '%' . $this->search . '%'))
         ->when($this->categoryFilter, fn($q) => $q->where('category_id', $this->categoryFilter))
@@ -241,8 +241,12 @@ $formatCurrency = function ($amount) {
                             @else
                             <div class="w-6"></div>
                             @endif
-                            <div class="h-10 w-10 rounded-lg bg-border-dark flex items-center justify-center">
-                                <span class="material-symbols-outlined text-text-secondary">inventory_2</span>
+                            <div class="h-10 w-10 rounded-lg bg-border-dark flex items-center justify-center overflow-hidden">
+                                @if($product->primary_image_url)
+                                    <img src="{{ $product->primary_image_url }}" alt="{{ $product->name }}" class="w-full h-full object-cover" />
+                                @else
+                                    <span class="material-symbols-outlined text-text-secondary">inventory_2</span>
+                                @endif
                             </div>
                             <div>
                                 <p class="text-sm font-medium text-white">{{ $product->name }}</p>
