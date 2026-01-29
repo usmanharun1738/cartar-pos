@@ -282,20 +282,12 @@ $formatCurrency = function ($amount) {
                     </td>
                     <td class="px-4 py-3 text-right" wire:click.stop>
                         <div class="flex items-center justify-end gap-2">
-                            @if($hasVariants)
                             <a href="/products/{{ $product->id }}/edit" wire:navigate
                                 class="p-1.5 rounded-lg hover:bg-border-dark text-text-secondary hover:text-white transition-colors"
+                                title="Edit product"
                             >
                                 <span class="material-symbols-outlined text-lg">edit</span>
                             </a>
-                            @else
-                            <button 
-                                wire:click="openEditModal({{ $product->id }})"
-                                class="p-1.5 rounded-lg hover:bg-border-dark text-text-secondary hover:text-white transition-colors"
-                            >
-                                <span class="material-symbols-outlined text-lg">edit</span>
-                            </button>
-                            @endif
                             <button 
                                 wire:click="deleteProduct({{ $product->id }})"
                                 wire:confirm="Are you sure you want to delete this product{{ $hasVariants ? ' and all its variants' : '' }}?"

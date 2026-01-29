@@ -20,6 +20,7 @@ state([
     'skuPrefix' => '',
     'categoryId' => '',
     'basePrice' => '',
+    'stockQuantity' => 0,
     
     // Product Options
     'selectedOptions' => [], // ['size' => [1, 2, 3], 'color' => [4, 5]]
@@ -188,32 +189,38 @@ $removeVariant = function ($index) {
 
 // Save Product with Variants
 $saveProduct = function () {
-    // Validate
+    // Validate - skuPrefix is now optional for simple products
     $this->validate([
         'productName' => 'required|string|max:255',
-        'skuPrefix' => 'required|string|max:20',
+        'skuPrefix' => 'nullable|string|max:20',
         'categoryId' => 'required|exists:categories,id',
     ]);
     
     if (empty($this->variants)) {
-        // Save as simple product
-        Product::create([
+        // Save as simple product (SKU will auto-generate if empty)
+        $productData = [
             'name' => $this->productName,
-            'sku' => $this->skuPrefix,
-            'sku_prefix' => $this->skuPrefix,
             'category_id' => $this->categoryId,
             'selling_price' => floatval($this->basePrice) ?: 0,
             'cost_price' => 0,
-            'stock_quantity' => 0,
+            'stock_quantity' => intval($this->stockQuantity) ?: 0,
             'is_active' => true,
             'has_variants' => false,
-        ]);
+        ];
+        
+        // Only set SKU if provided
+        if (!empty($this->skuPrefix)) {
+            $productData['sku'] = $this->skuPrefix;
+            $productData['sku_prefix'] = $this->skuPrefix;
+        }
+        
+        Product::create($productData);
     } else {
-        // Save product with variants
+        // Save product with variants (SKU prefix required for variant SKUs)
         $product = Product::create([
             'name' => $this->productName,
-            'sku' => $this->skuPrefix,
-            'sku_prefix' => $this->skuPrefix,
+            'sku' => $this->skuPrefix ?: null, // Will auto-generate
+            'sku_prefix' => $this->skuPrefix ?: null,
             'category_id' => $this->categoryId,
             'selling_price' => floatval($this->basePrice) ?: 0,
             'cost_price' => 0,
@@ -291,12 +298,12 @@ $getSelectedOptionObjects = function ($typeSlug) {
                 <div class="grid grid-cols-2 gap-4">
                     <!-- SKU Prefix -->
                     <div>
-                        <label class="block text-sm font-medium text-gray-200 mb-1.5">SKU Prefix</label>
+                        <label class="block text-sm font-medium text-gray-200 mb-1.5">SKU <span class="text-text-secondary font-normal">(Optional - auto-generates)</span></label>
                         <input 
                             wire:model.live="skuPrefix" 
                             type="text" 
                             class="w-full h-10 bg-border-dark border-0 rounded-lg text-white text-sm px-4 focus:ring-1 focus:ring-primary placeholder:text-text-secondary"
-                            placeholder="PRD-101"
+                            placeholder="Leave blank to auto-generate"
                         />
                         @error('skuPrefix') <span class="text-xs text-red-400 mt-1">{{ $message }}</span> @enderror
                     </div>
@@ -317,16 +324,28 @@ $getSelectedOptionObjects = function ($typeSlug) {
                     </div>
                 </div>
                 
-                <!-- Base Price -->
-                <div class="w-1/2">
-                    <label class="block text-sm font-medium text-gray-200 mb-1.5">Base Price (₦)</label>
-                    <input 
-                        wire:model.live="basePrice" 
-                        type="number" 
-                        step="0.01"
-                        class="w-full h-10 bg-border-dark border-0 rounded-lg text-white text-sm px-4 focus:ring-1 focus:ring-primary placeholder:text-text-secondary"
-                        placeholder="0.00"
-                    />
+                <!-- Base Price & Stock Quantity -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-200 mb-1.5">Base Price (₦)</label>
+                        <input 
+                            wire:model.live="basePrice" 
+                            type="number" 
+                            step="0.01"
+                            class="w-full h-10 bg-border-dark border-0 rounded-lg text-white text-sm px-4 focus:ring-1 focus:ring-primary placeholder:text-text-secondary"
+                            placeholder="0.00"
+                        />
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-200 mb-1.5">Stock Quantity <span class="text-text-secondary font-normal">(for simple products)</span></label>
+                        <input 
+                            wire:model="stockQuantity" 
+                            type="number" 
+                            min="0"
+                            class="w-full h-10 bg-border-dark border-0 rounded-lg text-white text-sm px-4 focus:ring-1 focus:ring-primary placeholder:text-text-secondary"
+                            placeholder="0"
+                        />
+                    </div>
                 </div>
             </div>
         </div>
